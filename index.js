@@ -17,7 +17,7 @@ const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  //origin: ['https://bistro-boss-restaurant-client.netlify.app'],
+  origin: ['https://bistro-boss-restaurant-client.netlify.app'],
 }));
 app.use(express.json());
 
