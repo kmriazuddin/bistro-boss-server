@@ -5,11 +5,19 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+const mailgun = new Mailgun(formData);
+const mg = mailgun.client({ username: 'api', key: process.env.MAILGUN_API_KEY || 'key-yourkeyhere' });
+
+
+
 const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: ['https://bistro-boss-restaurant-client.netlify.app'],
+  //origin: ['https://bistro-boss-restaurant-client.netlify.app'],
 }));
 app.use(express.json());
 
@@ -52,35 +60,35 @@ async function run() {
     }
 
     // Use Verify Admin After VerifyToken
-    const verifyAdmin = async(req, res, next) => {
+    const verifyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
-      const query = {email: email};
+      const query = { email: email };
       const user = await userCollection.findOne(query);
       const isAdmin = user?.role === 'admin';
-      if(!isAdmin){
-        return res.status(403).send({message: 'Forbidden Access'});
+      if (!isAdmin) {
+        return res.status(403).send({ message: 'Forbidden Access' });
       }
       next();
     }
 
     // JWT Related API
-    app.post('/jwt', async(req, res) => {
+    app.post('/jwt', async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN, {
         expiresIn: '20h'
       });
-      res.send({token})
+      res.send({ token })
     })
 
     //*** User Related API
-    app.post('/users', async(req, res) => {
+    app.post('/users', async (req, res) => {
       const user = req.body;
       // Insert Email If User Doesn't Exists:
       // You Can Di this Many Ways (1. Email Unique, 2. Upsert, 3. Simple Checking)
-      const query = {email: user.email}
+      const query = { email: user.email }
       const existingUser = await userCollection.findOne(query);
-      if(existingUser){
-        return res.send({message: 'User Already Exists', insertedId: null})
+      if (existingUser) {
+        return res.send({ message: 'User Already Exists', insertedId: null })
       }
       const result = await userCollection.insertOne(user);
       res.send(result);
@@ -93,9 +101,9 @@ async function run() {
     });
 
     // User Delete
-    app.delete('/users/:id', verifyToken, verifyAdmin, async(req, res) => {
+    app.delete('/users/:id', verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)}
+      const query = { _id: new ObjectId(id) }
       const result = await userCollection.deleteOne(query);
       res.send(result);
     });
@@ -103,7 +111,7 @@ async function run() {
     // User Update Admin Role
     app.patch('/users/admin/:id', verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const filter = {_id: new ObjectId(id)}
+      const filter = { _id: new ObjectId(id) }
       const updateDoc = {
         $set: {
           role: 'admin'
@@ -114,62 +122,62 @@ async function run() {
     });
 
     // Admin
-    app.get('/users/admin/:email', verifyToken, async(req, res) => {
+    app.get('/users/admin/:email', verifyToken, async (req, res) => {
       const email = req.params.email;
-      if(email !== req.decoded.email){
-        return res.status(403).send({message: 'Forbidden Access'})
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: 'Forbidden Access' })
       }
 
-      const query = {email: email};
+      const query = { email: email };
       const user = await userCollection.findOne(query);
       let admin = false;
-      if(user){
+      if (user) {
         admin = user?.role === 'admin';
       }
-      res.send({admin});
+      res.send({ admin });
     })
 
     //***
 
     //*** Menu Related API
     // Menu Data Collection
-    app.get('/menu', async(req, res) => {
-        const result = await menuCollection.find().toArray();
-        res.send(result);
+    app.get('/menu', async (req, res) => {
+      const result = await menuCollection.find().toArray();
+      res.send(result);
     });
 
     // Add Item Page To Data Insert Server
-    app.post('/menu', verifyToken, verifyAdmin, async(req, res) => {
+    app.post('/menu', verifyToken, verifyAdmin, async (req, res) => {
       const item = req.body;
       const result = await menuCollection.insertOne(item);
       res.send(result);
     });
 
     // Reviews Data Collection
-    app.get('/reviews', async(req, res) => {
-        const result = await reviewsCollection.find().toArray();
-        res.send(result);
+    app.get('/reviews', async (req, res) => {
+      const result = await reviewsCollection.find().toArray();
+      res.send(result);
     });
 
     // Carts Collection
-    app.post('/carts', async(req, res) => {
+    app.post('/carts', async (req, res) => {
       const cartItem = req.body;
       const result = await cartCollection.insertOne(cartItem);
       res.send(result);
     });
 
     // User Add Cart To Data Collection
-    app.get('/carts', async(req, res) => {
+    app.get('/carts', async (req, res) => {
       const email = req.query.email;
-      const query = {email: email};
+      const query = { email: email };
       const result = await cartCollection.find(query).toArray();
       res.send(result);
     });
 
     // Specific Cart Item Delete
-    app.delete('/carts/:id', async(req, res) => {
+    app.delete('/carts/:id', async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)};
+      const query = { _id: new ObjectId(id) };
       const result = await cartCollection.deleteOne(query);
       res.send(result);
     });
@@ -180,14 +188,14 @@ async function run() {
     // Delete Items
     app.delete('/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const result = await menuCollection.deleteOne({_id: id});
+      const result = await menuCollection.deleteOne({ _id: id });
       res.send(result);
     });
 
     // Menu Data Update
     app.get('/menu/:id', async (req, res) => {
       const id = req.params.id;
-      const result = await menuCollection.findOne({_id: id});
+      const result = await menuCollection.findOne({ _id: id });
       res.send(result);
     });
 
@@ -195,7 +203,7 @@ async function run() {
     app.patch('/menu/:id', async (req, res) => {
       const item = req.body;
       const id = req.params.id;
-      const filter = {_id: id}
+      const filter = { _id: id }
       const updateDoc = {
         $set: {
           name: item.name,
@@ -213,8 +221,8 @@ async function run() {
 
     // ***
     // Payment Intent
-    app.post('/create-payment-intent', async(req, res) => {
-      const {price} = req.body;
+    app.post('/create-payment-intent', async (req, res) => {
+      const { price } = req.body;
       const amount = parseInt(price * 100);
       console.log(amount, 'Amount Inside The Intent');
 
@@ -230,32 +238,50 @@ async function run() {
     });
 
     // Payment History Save
-    app.post('/payments', async(req, res) => {
+    app.post('/payments', async (req, res) => {
       const payment = req.body;
       const paymentResult = await paymentCollection.insertOne(payment);
 
       // Carefully Delete Each Item From The Cart
       console.log('Payment Info', payment);
-      const query = {_id: {
-        $in: payment.cartIds.map(id => new ObjectId(id))
-      }}
+      const query = {
+        _id: {
+          $in: payment.cartIds.map(id => new ObjectId(id))
+        }
+      }
       const deleteResult = await cartCollection.deleteMany(query);
-      res.send({paymentResult, deleteResult});
+      // ***
+      // Mailgun
+      mg.messages
+        .create(process.env.MAIL_SENDING_DOMAIN, {
+          from: "Mailgun Sandbox <postmaster@sandbox67ac8cb495e143be8e4209b73d3263a6.mailgun.org>",
+          to: ["mohammadriazuddin3@gmail.com"],
+          subject: "Bistro Boss Order Confirmation",
+          text: "Testing some Mailgun awesomness!",
+          html: `<div>
+      <h3>Thank You For Your Order</h3>
+      <h3>Your Transaction Id: <strong>${payment.transactionId}</strong></h3>
+      </div>`
+        })
+        .then(msg => console.log(msg)) // logs response data
+        .catch(err => console.log(err)); // logs any error`;
+      // ***
+      res.send({ paymentResult, deleteResult });
     });
 
     // Display The Payment History
-    app.get('/payment/:email', verifyToken, async(req, res) => {
-      const query = {email: req.params.email}
+    app.get('/payment/:email', verifyToken, async (req, res) => {
+      const query = { email: req.params.email }
       console.log(query);
-      if(req.params.email !== req.decoded.email){
-        return res.status(403).send({message: 'Forbidden Access'});
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: 'Forbidden Access' });
       }
       const result = await paymentCollection.find(query).toArray();
       res.send(result);
     });
 
     // Stats Or Analytics
-    app.get('/admin-stats',  async(req, res) => {
+    app.get('/admin-stats', async (req, res) => {
       const users = await userCollection.estimatedDocumentCount();
       const menuItems = await menuCollection.estimatedDocumentCount();
       const orders = await paymentCollection.estimatedDocumentCount();
@@ -271,7 +297,7 @@ async function run() {
         }
       ]).toArray();
       const revenue = result.length > 0 ? result[0].totalRevenue : 0;
-      res.send({users, menuItems, orders, revenue});
+      res.send({ users, menuItems, orders, revenue });
     });
 
     // Order Status And Analytics
@@ -280,7 +306,7 @@ async function run() {
     //* For Every Item In The Menu Collection That You Found From A Payment Entry (Document).
 
     // Using Aggregate Pipeline
-    app.get('/order-stats', verifyToken, verifyAdmin, async(req, res) => {
+    app.get('/order-stats', verifyToken, verifyAdmin, async (req, res) => {
       const result = await paymentCollection.aggregate([
         {
           $unwind: '$menuItemIds'
@@ -299,8 +325,8 @@ async function run() {
         {
           $group: {
             _id: '$menuItems.category',
-            quantity: {$sum: 1},
-            revenue: {$sum: '$menuItems.price'}
+            quantity: { $sum: 1 },
+            revenue: { $sum: '$menuItems.price' }
           }
         },
         {
@@ -315,6 +341,10 @@ async function run() {
       res.send(result);
     });
     // ***
+
+
+
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
@@ -328,9 +358,9 @@ run().catch(console.dir);
 
 
 app.get('/', (req, res) => {
-    res.send('Boss is sitting')
+  res.send('Boss is sitting')
 });
 
 app.listen(port, () => {
-    console.log(`Bistro Boss Is Sitting On The Port ${port}`)
+  console.log(`Bistro Boss Is Sitting On The Port ${port}`)
 })
